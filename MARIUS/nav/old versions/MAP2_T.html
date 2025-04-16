@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    
+        <script>
+            L_NO_TOUCH = false;
+            L_DISABLE_3D = false;
+        </script>
+    
+    <style>html, body {width: 100%;height: 100%;margin: 0;padding: 0;}</style>
+    <style>#map {position:absolute;top:0;bottom:0;right:0;left:0;}</style>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+    <script src="https://unpkg.com/leaflet-polylinedecorator@1.6.0/dist/leaflet.polylineDecorator.js"></script>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css"/>
+    
+            <meta name="viewport" content="width=device-width,
+                initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <style>
+                #map_dbc12bcc9008d2a959c3793447c41de0 {
+                    position: relative;
+                    width: 100.0%;
+                    height: 100.0%;
+                    left: 0.0%;
+                    top: 0.0%;
+                }
+                .leaflet-container { font-size: 1rem; }
+            </style>
+        
+</head>
+<body>
+    
+    
+            <div class="folium-map" id="map_dbc12bcc9008d2a959c3793447c41de0" ></div>
+        
+</body>
+<script>
+    
+    
+            var map_dbc12bcc9008d2a959c3793447c41de0 = L.map(
+                "map_dbc12bcc9008d2a959c3793447c41de0",
+                {
+                    center: [43.133331, 5.98333],
+                    crs: L.CRS.EPSG3857,
+                    ...{
+  "zoom": 12,
+  "zoomControl": true,
+  "preferCanvas": false,
+}
+
+                }
+            );
+
+            
+
+        
+    
+            var tile_layer_d8c3c050040d54522a584777e6f3ed18 = L.tileLayer(
+                "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                {
+  "minZoom": 0,
+  "maxZoom": 19,
+  "maxNativeZoom": 19,
+  "noWrap": false,
+  "attribution": "\u0026copy; \u003ca href=\"https://www.openstreetmap.org/copyright\"\u003eOpenStreetMap\u003c/a\u003e contributors",
+  "subdomains": "abc",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_d8c3c050040d54522a584777e6f3ed18.addTo(map_dbc12bcc9008d2a959c3793447c41de0);
+        
+</script>
+<style>
+    /* Style pour la liste des points */
+    #point-list {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: white;
+        padding: 10px;
+        border-radius: 5px;
+        box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.3);
+        max-height: 200px;
+        overflow-y: auto;
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        z-index: 1000; /* Assure que la liste reste au premier plan */
+    }
+</style>
+
+<div id="point-list">
+    <strong>Points :</strong>
+    <ul id="points"></ul>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    var map = map_dbc12bcc9008d2a959c3793447c41de0;
+    var markers = [];
+    var arrowLayer = null;
+    var lineLayer = null;
+    var pointsList = document.getElementById("points");
+
+    // Définition des icônes
+    var redIcon = L.AwesomeMarkers.icon({ icon: 'map-marker', markerColor: 'red' });
+    var greenIcon = L.AwesomeMarkers.icon({ icon: 'map-marker', markerColor: 'green' });
+    var defaultIcon = L.AwesomeMarkers.icon({ icon: 'map-marker', markerColor: 'blue' });
+
+    function refreshUI() {
+        pointsList.innerHTML = "";
+
+        markers.forEach((marker, index) => {
+            marker.unbindTooltip().bindTooltip(`#${index + 1}`, { permanent: true, direction: "top", offset: [0, -10] });
+
+            var listItem = document.createElement("li");
+            listItem.textContent = `Point #${index + 1} - (${marker.getLatLng().lat.toFixed(5)}, ${marker.getLatLng().lng.toFixed(5)})`;
+
+            // Ajout de la distance par rapport au précédent
+            if (index > 0) {
+                let prevLatLng = markers[index - 1].getLatLng();
+                let currentLatLng = marker.getLatLng();
+                let distance = prevLatLng.distanceTo(currentLatLng).toFixed(2); // Distance en mètres
+                listItem.textContent += ` | Distance: ${distance} m`;
+            }
+
+            pointsList.appendChild(listItem);
+
+            // Mise à jour des icônes
+            if (index === 0) {
+                marker.setIcon(redIcon); // Premier point en rouge
+            } else if (index === markers.length - 1) {
+                marker.setIcon(greenIcon); // Dernier point en vert
+            } else {
+                marker.setIcon(defaultIcon); // Points intermédiaires en bleu
+            }
+        });
+
+        updateArrows(); // Mise à jour des flèches
+    }
+
+    function updateArrows() {
+        // Suppression des anciennes flèches et lignes
+        if (arrowLayer) { map.removeLayer(arrowLayer); }
+        if (lineLayer) { map.removeLayer(lineLayer); }
+
+        if (markers.length > 1) {
+            let polyline = L.polyline(markers.map(m => m.getLatLng()), { color: "rgba(0, 0, 255, 0.3)", weight: 3 }).addTo(map);
+            lineLayer = polyline;
+
+            arrowLayer = L.polylineDecorator(polyline, {
+                patterns: [
+                    { offset: '50%', repeat: 0, symbol: L.Symbol.arrowHead({ pixelSize: 10, polygon: false, pathOptions: { stroke: true, color: 'blue' } }) }
+                ]
+            }).addTo(map);
+        }
+    }
+
+    function removeMarker(marker) {
+        var index = markers.indexOf(marker);
+        if (index !== -1) {
+            map.removeLayer(marker);
+            markers.splice(index, 1);
+            refreshUI();
+        }
+    }
+
+    function onMapClick(e) {
+        var lat = e.latlng.lat;
+        var lng = e.latlng.lng;
+
+        // Vérifier si on clique sur un marqueur existant pour le supprimer
+        var clickedMarker = markers.find(m => m.getLatLng().equals(e.latlng));
+        if (clickedMarker) {
+            removeMarker(clickedMarker);
+            return;
+        }
+
+        // Ajouter un marqueur
+        var marker = L.marker([lat, lng], { icon: defaultIcon }).addTo(map);
+        marker.on('click', function () { removeMarker(marker); }); // Suppression directe au clic
+        markers.push(marker);
+        refreshUI();
+    }
+
+    map.on('click', onMapClick);
+});
+
+</script>
+</body>
+</html>

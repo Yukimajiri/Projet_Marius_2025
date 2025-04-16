@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    <script>
+        L_NO_TOUCH = false;
+        L_DISABLE_3D = false;
+    </script>
+    <style>html, body {width: 100%;height: 100%;margin: 0;padding: 0;}</style>
+    <style>#map {position:absolute;top:0;bottom:0;right:0;left:0;}</style>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+    <script src="https://unpkg.com/leaflet-polylinedecorator@1.6.0/dist/leaflet.polylineDecorator.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet.locatecontrol@0.76.0/dist/L.Control.Locate.min.js"></script>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.locatecontrol@0.76.0/dist/L.Control.Locate.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css"/>
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <style>
+        #map_dbc12bcc9008d2a959c3793447c41de0 {
+            position: relative;
+            width: 100.0%;
+            height: 100.0%;
+            left: 0.0%;
+            top: 0.0%;
+        }
+        .leaflet-container { font-size: 1rem; }
+        
+        /* Enhanced control panel */
+        #control-panel {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 2px 2px 10px rgba(0,0,0,0.3);
+            z-index: 1000;
+            width: 250px;
+        }
+        
+        #navigation-status {
+            margin-top: 10px;
+            padding: 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="folium-map" id="map_dbc12bcc9008d2a959c3793447c41de0"></div>
+    
+    <!-- Enhanced Control Panel -->
+    <div id="control-panel">
+        <strong>Navigation Control</strong>
+        <div class="d-flex justify-content-between mt-2">
+            <button id="start-nav" class="btn btn-success btn-sm">Start Navigation</button>
+            <button id="clear-points" class="btn btn-danger btn-sm">Clear All Points</button>
+        </div>
+        <div id="navigation-status" class="bg-light">Ready</div>
+    </div>
+    
+    <!-- Points List -->
+    <div id="point-list">
+        <strong>Waypoints:</strong>
+        <ul id="points"></ul>
+    </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    var map = map_dbc12bcc9008d2a959c3793447c41de0;
+    var markers = [];
+    var arrowLayer = null;
+    var lineLayer = null;
+    var pointsList = document.getElementById("points");
+    var currentPositionMarker = null;
+    var watchId = null;
+    var proximityRadius = 10; // meters
+    var ws;
+    var isNavigating = false;
+
+    // Icons
+    var redIcon = L.AwesomeMarkers.icon({ icon: 'map-marker', markerColor: 'red' });
+    var greenIcon = L.AwesomeMarkers.icon({ icon: 'map-marker', markerColor: 'green' });
+    var defaultIcon = L.AwesomeMarkers.icon({ icon: 'map-marker', markerColor: 'blue' });
+    var boatIcon = L.AwesomeMarkers.icon({ icon: 'ship', markerColor: 'purple', prefix: 'fa' });
+
+    // Connect to WebSocket
+    function connectWebSocket() {
+        ws = new WebSocket("ws://localhost:8765");
+        
+        ws.onopen = function() {
+            console.log("✅ WebSocket connected");
+            updateStatus("Connected to server", "bg-success");
+        };
+        
+        ws.onmessage = function(event) {
+            console.log("📩 Server message:", event.data);
+            try {
+                let data = JSON.parse(event.data);
+                if (data.type === "update") {
+                    updateMarkers(data.points);
+                }
+            } catch(e) {
+                console.error("JSON parse error:", e);
+            }
+        };
+        
+        ws.onclose = function() {
+            console.log("❌ WebSocket disconnected");
+            updateStatus("Disconnected", "bg-danger");
+            setTimeout(connectWebSocket, 5000); // Reconnect after 5 seconds
+        };
+        
+        ws.onerror = function(err) {
+            console.error("WebSocket error:", err);
+            updateStatus("Connection error", "bg-warning");
+        };
+    }
+    
+    // Initialize
+    connectWebSocket();
+    
+    // GPS Tracking
+    if ("geolocation" in navigator) {
+        watchId = navigator.geolocation.watchPosition(
+            updateGpsPosition,
+            handleGpsError,
+            { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
+        );
+        L.control.locate({ position: 'topright' }).addTo(map);
+    } else {
+        updateStatus("GPS not supported", "bg-warning");
+    }
+
+    // Event Listeners
+    document.getElementById("start-nav").addEventListener("click", toggleNavigation);
+    document.getElementById("clear-points").addEventListener("click", clearAllPoints);
+    map.on('click', onMapClick);
+
+    function updateStatus(message, cssClass) {
+        const statusEl = document.getElementById("navigation-status");
+        statusEl.textContent = message;
+        statusEl.className = "bg-light"; // Reset classes
+        if (cssClass) statusEl.classList.add(cssClass);
+    }
+
+    function toggleNavigation() {
+        isNavigating = !isNavigating;
+        const btn = document.getElementById("start-nav");
+        if (isNavigating) {
+            btn.textContent = "Stop Navigation";
+            btn.classList.remove("btn-success");
+            btn.classList.add("btn-warning");
+            updateStatus("Navigation Active", "bg-info");
+            if (ws.readyState === WebSocket.OPEN && markers.length > 0) {
+                ws.send(JSON.stringify({ type: "start_navigation" }));
+            }
+        } else {
+            btn.textContent = "Start Navigation";
+            btn.classList.remove("btn-warning");
+            btn.classList.add("btn-success");
+            updateStatus("Navigation Paused", "bg-light");
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: "stop_navigation" }));
+            }
+        }
+    }
+
+    function clearAllPoints() {
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: "clear_points" }));
+        }
+        markers.forEach(marker => map.removeLayer(marker));
+        markers = [];
+        refreshUI();
+        updateStatus("All points cleared", "bg-info");
+    }
+
+    function updateGpsPosition(position) {
+        const pos = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+            accuracy: position.coords.accuracy
+        };
+        
+        // Update boat marker
+        if (!currentPositionMarker) {
+            currentPositionMarker = L.marker([pos.lat, pos.lng], {
+                icon: boatIcon,
+                rotationAngle: position.coords.heading || 0
+            }).addTo(map).bindPopup("Your Position");
+        } else {
+            currentPositionMarker.setLatLng([pos.lat, pos.lng]);
+            if (position.coords.heading) {
+                currentPositionMarker.setRotationAngle(position.coords.heading);
+            }
+        }
+        
+        // Update accuracy circle
+        if (currentPositionMarker._accuracyCircle) {
+            map.removeLayer(currentPositionMarker._accuracyCircle);
+        }
+        currentPositionMarker._accuracyCircle = L.circle([pos.lat, pos.lng], {
+            radius: pos.accuracy,
+            color: '#03f',
+            fillColor: '#03f',
+            fillOpacity: 0.2
+        }).addTo(map);
+        
+        // Check proximity to waypoints
+        if (isNavigating) {
+            checkWaypointProximity(pos);
+        }
+        
+        // Send to server
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: "gps_position",
+                position: pos,
+                heading: position.coords.heading,
+                speed: position.coords.speed
+            }));
+        }
+    }
+
+    function checkWaypointProximity(currentPos) {
+        markers.forEach((marker, index) => {
+            const markerPos = marker.getLatLng();
+            const distance = currentPos.distanceTo(markerPos);
+            
+            if (distance <= proximityRadius) {
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: "reached_waypoint",
+                        index: index,
+                        distance: distance
+                    }));
+                }
+                
+                // Remove the waypoint if it's not the last one
+                if (index < markers.length - 1) {
+                    removeMarker(marker);
+                }
+            }
+        });
+    }
+
+    function handleGpsError(error) {
+        console.error("GPS Error:", error);
+        updateStatus(`GPS Error: ${error.message}`, "bg-danger");
+    }
+
+    function updateMarkers(points) {
+        // Clear existing markers
+        markers.forEach(m => map.removeLayer(m));
+        markers = [];
+        
+        // Add new markers
+        points.forEach(point => {
+            const marker = L.marker([point.lat, point.lng], { 
+                icon: defaultIcon,
+                draggable: true
+            }).addTo(map);
+            
+            marker.on('click', () => removeMarker(marker));
+            marker.on('dragend', () => updateMarkerPosition(marker));
+            markers.push(marker);
+        });
+        
+        refreshUI();
+    }
+
+    function updateMarkerPosition(marker) {
+        const index = markers.indexOf(marker);
+        if (index !== -1 && ws.readyState === WebSocket.OPEN) {
+            const newPos = marker.getLatLng();
+            ws.send(JSON.stringify({
+                type: "update_point",
+                index: index,
+                point: { lat: newPos.lat, lng: newPos.lng }
+            }));
+        }
+        refreshUI();
+    }
+
+    function onMapClick(e) {
+        if (isNavigating) return; // Prevent adding points during navigation
+        
+        const clickedMarker = markers.find(m => m.getLatLng().equals(e.latlng));
+        if (clickedMarker) {
+            removeMarker(clickedMarker);
+            return;
+        }
+        
+        const marker = L.marker([e.latlng.lat, e.latlng.lng], { 
+            icon: defaultIcon,
+            draggable: true
+        }).addTo(map);
+        
+        marker.on('click', () => removeMarker(marker));
+        marker.on('dragend', () => updateMarkerPosition(marker));
+        markers.push(marker);
+        
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ 
+                type: "add_point", 
+                point: { lat: e.latlng.lat, lng: e.latlng.lng } 
+            }));
+        }
+        
+        refreshUI();
+    }
+
+    function removeMarker(marker) {
+        const index = markers.indexOf(marker);
+        if (index !== -1) {
+            map.removeLayer(marker);
+            markers.splice(index, 1);
+            
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: "remove_point", index: index }));
+            }
+            
+            refreshUI();
+        }
+    }
+
+    function refreshUI() {
+        pointsList.innerHTML = "";
+        
+        markers.forEach((marker, index) => {
+            const latLng = marker.getLatLng();
+            marker.unbindTooltip().bindTooltip(`#${index + 1}`, { 
+                permanent: true, 
+                direction: "top" 
+            });
+            
+            const listItem = document.createElement("li");
+            listItem.className = "d-flex justify-content-between align-items-center";
+            
+            const pointInfo = document.createElement("span");
+            pointInfo.textContent = `Waypoint ${index + 1}: ${latLng.lat.toFixed(5)}, ${latLng.lng.toFixed(5)}`;
+            
+            if (index > 0) {
+                const prevLatLng = markers[index - 1].getLatLng();
+                const distance = latLng.distanceTo(prevLatLng).toFixed(2);
+                pointInfo.textContent += ` | ${distance}m`;
+            }
+            
+            const deleteBtn = document.createElement("button");
+            deleteBtn.className = "btn btn-sm btn-outline-danger";
+            deleteBtn.innerHTML = "&times;";
+            deleteBtn.onclick = () => removeMarker(marker);
+            
+            listItem.appendChild(pointInfo);
+            listItem.appendChild(deleteBtn);
+            pointsList.appendChild(listItem);
+            
+            // Update icons
+            if (index === 0) {
+                marker.setIcon(redIcon);
+            } else if (index === markers.length - 1) {
+                marker.setIcon(greenIcon);
+            } else {
+                marker.setIcon(defaultIcon);
+            }
+        });
+        
+        updateArrows();
+    }
+
+    function updateArrows() {
+        if (arrowLayer) map.removeLayer(arrowLayer);
+        if (lineLayer) map.removeLayer(lineLayer);
+        
+        if (markers.length > 1) {
+            const polyline = L.polyline(
+                markers.map(m => m.getLatLng()), 
+                { color: "rgba(0, 0, 255, 0.5)", weight: 3 }
+            ).addTo(map);
+            lineLayer = polyline;
+            
+            arrowLayer = L.polylineDecorator(polyline, {
+                patterns: [{
+                    offset: '50%',
+                    repeat: 0,
+                    symbol: L.Symbol.arrowHead({
+                        pixelSize: 10,
+                        polygon: false,
+                        pathOptions: { stroke: true, color: 'blue' }
+                    })
+                }]
+            }).addTo(map);
+        }
+    }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <!-- Métadonnées et encodage -->
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    
+    <!-- Configuration Leaflet -->
+    <script>
+        L_NO_TOUCH = false;
+        L_DISABLE_3D = false;
+    </script>
+    
+    <style>
+    html, body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+    }
+    #map_dbc12bcc9008d2a959c3793447c41de0 {
+        width: 100%;
+        height: 100%;
+    }
+    </style>
+    
+    <!-- Importations des bibliothèques JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+    <script src="https://unpkg.com/leaflet-polylinedecorator@1.6.0/dist/leaflet.polylineDecorator.js"></script>
+
+    <!-- Importations des feuilles de style -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css"/>
+    
+    <!-- Configuration responsive -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <style>
+        #map_dbc12bcc9008d2a959c3793447c41de0 {
+            position: relative;
+            width: 100.0%;
+            height: 100.0%;
+            left: 0.0%;
+            top: 0.0%;
+        }
+        .leaflet-container { font-size: 1rem; }
+    </style>
+</head>
+<body>
+    <!-- Conteneur principal de la carte -->
+    <div class="folium-map" id="map_dbc12bcc9008d2a959c3793447c41de0"></div>
+    
+    <!-- Panneau latéral pour afficher la liste des points -->
+    <style>
+        #point-list {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.3);
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            z-index: 1000;
+        }
+    </style>
+
+    <div id="point-list">
+        <strong>Points :</strong>
+        <ul id="points"></ul>
+    </div>
+
+    <script>
+    // Attendre que le DOM soit complètement chargé
+        document.addEventListener("DOMContentLoaded", function () {
+        // Initialize the map properly
+        var map = L.map('map_dbc12bcc9008d2a959c3793447c41de0').setView([43.61, 3.88], 13); // Default coordinates (Montpellier)
+        
+        // Add a tile layer (OpenStreetMap)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+    
+        // Rest of your existing code...
+        var markers = []; // Stocke tous les marqueurs
+        var arrowLayer = null; // Couche pour les flèches de direction
+        var lineLayer = null; // Couche pour les lignes entre points
+        var pointsList = document.getElementById("points"); // Liste HTML des points
+    
+        // Configuration des icônes
+        var redIcon = L.AwesomeMarkers.icon({ icon: 'map-marker', markerColor: 'red' }); // Premier point
+        var greenIcon = L.AwesomeMarkers.icon({ icon: 'map-marker', markerColor: 'green' }); // Dernier point
+        var defaultIcon = L.AwesomeMarkers.icon({ icon: 'map-marker', markerColor: 'blue' }); // Points intermédiaires
+    
+        // 1️⃣ Initialisation de la connexion WebSocket
+        var ws = new WebSocket("ws://192.168.254.120:8765");
+
+        // Gestionnaires d'événements WebSocket
+        ws.onopen = function () {
+            console.log("✅ Connexion WebSocket établie avec le serveur !");
+        };
+
+        ws.onmessage = function (event) {
+            console.log("📩 Message reçu du serveur:", event.data);
+            try {
+                let data = JSON.parse(event.data);
+                if (data.type === "update") {
+                    // Mise à jour des marqueurs selon les données du serveur
+                    markers.forEach(m => map.removeLayer(m));
+                    markers = [];
+                    data.points.forEach(point => {
+                        var marker = L.marker([point.lat, point.lng], { icon: defaultIcon }).addTo(map);
+                        marker.on('click', function () { removeMarker(marker); });
+                        markers.push(marker);
+                    });
+                    refreshUI();
+                }
+            } catch (e) {
+                console.error("Erreur de parsing JSON:", e);
+            }
+        };
+
+        ws.onclose = function () {
+            console.log("❌ Connexion WebSocket fermée.");
+        };
+
+        /**
+         * Met à jour l'interface utilisateur :
+         * - Liste des points
+         * - Icônes des marqueurs
+         * - Lignes et flèches
+         */
+        function refreshUI() {
+            pointsList.innerHTML = "";
+
+            markers.forEach((marker, index) => {
+                // Ajout d'un tooltip avec le numéro du point
+                marker.unbindTooltip().bindTooltip(`#${index + 1}`, { 
+                    permanent: true, 
+                    direction: "top", 
+                    offset: [0, -10] 
+                });
+
+                // Création d'un élément de liste
+                var listItem = document.createElement("li");
+                listItem.textContent = `Point #${index + 1} - (${marker.getLatLng().lat.toFixed(5)}, ${marker.getLatLng().lng.toFixed(5)})`;
+
+                // Calcul de la distance avec le point précédent (si existant)
+                if (index > 0) {
+                    let prevLatLng = markers[index - 1].getLatLng();
+                    let currentLatLng = marker.getLatLng();
+                    let distance = prevLatLng.distanceTo(currentLatLng).toFixed(2);
+                    listItem.textContent += ` | Distance: ${distance} m`;
+                }
+
+                pointsList.appendChild(listItem);
+
+                // Changement d'icône selon la position du point
+                if (index === 0) {
+                    marker.setIcon(redIcon); // Premier point
+                } else if (index === markers.length - 1) {
+                    marker.setIcon(greenIcon); // Dernier point
+                } else {
+                    marker.setIcon(defaultIcon); // Points intermédiaires
+                }
+            });
+
+            updateArrows(); // Mise à jour des flèches de direction
+        }
+
+        /**
+         * Dessine les flèches de direction entre les points
+         */
+        function updateArrows() {
+            // Nettoyage des anciennes couches
+            if (arrowLayer) map.removeLayer(arrowLayer);
+            if (lineLayer) map.removeLayer(lineLayer);
+
+            // Création des nouvelles couches si assez de points
+            if (markers.length > 1) {
+                // Ligne bleue semi-transparente
+                let polyline = L.polyline(
+                    markers.map(m => m.getLatLng()), 
+                    { color: "rgba(0, 0, 255, 0.3)", weight: 3 }
+                ).addTo(map);
+                lineLayer = polyline;
+
+                // Flèches de direction
+                arrowLayer = L.polylineDecorator(polyline, {
+                    patterns: [
+                        { 
+                            offset: '50%', 
+                            repeat: 0, 
+                            symbol: L.Symbol.arrowHead({ 
+                                pixelSize: 10, 
+                                polygon: false, 
+                                pathOptions: { stroke: true, color: 'blue' } 
+                            }) 
+                        }
+                    ]
+                }).addTo(map);
+            }
+        }
+
+        /**
+         * Supprime un marqueur et notifie le serveur
+         * @param {L.Marker} marker - Le marqueur à supprimer
+         */
+        function removeMarker(marker) {
+            var index = markers.indexOf(marker);
+            if (index !== -1) {
+                map.removeLayer(marker);
+                markers.splice(index, 1);
+                
+                // Notification au serveur
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ 
+                        type: "remove_point", 
+                        index: index 
+                    }));
+                }
+                
+                refreshUI();
+            }
+        }
+
+        /**
+         * Gestionnaire de clic sur la carte
+         * @param {L.LeafletMouseEvent} e - Événement de clic
+         */
+        function onMapClick(e) {
+            // Vérifie si on a cliqué sur un marqueur existant
+            var clickedMarker = markers.find(m => m.getLatLng().equals(e.latlng));
+            if (clickedMarker) {
+                removeMarker(clickedMarker);
+                return;
+            }
+
+            // Création d'un nouveau marqueur
+            var marker = L.marker([e.latlng.lat, e.latlng.lng], { icon: defaultIcon }).addTo(map);
+            marker.on('click', function () { removeMarker(marker); });
+            markers.push(marker);
+            
+            // Envoi du nouveau point au serveur
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ 
+                    type: "add_point", 
+                    point: { lat: e.latlng.lat, lng: e.latlng.lng } 
+                }));
+            }
+            
+            refreshUI();
+        }
+
+        // Écouteur d'événement pour les clics sur la carte
+        map.on('click', onMapClick);
+    });
+    </script>
+</body>
+</html>

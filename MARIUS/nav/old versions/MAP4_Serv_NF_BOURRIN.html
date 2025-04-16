@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html>
+<head>
+    
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    
+        <script>
+            L_NO_TOUCH = false;
+            L_DISABLE_3D = false;
+        </script>
+    
+    <style>html, body {width: 100%;height: 100%;margin: 0;padding: 0;}</style>
+    <style>#map {position:absolute;top:0;bottom:0;right:0;left:0;}</style>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.js"></script>
+    <script src="https://unpkg.com/leaflet-polylinedecorator@1.6.0/dist/leaflet.polylineDecorator.js"></script>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.2/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://netdna.bootstrapcdn.com/bootstrap/3.0.0/css/bootstrap-glyphicons.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.2.0/css/all.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.2/leaflet.awesome-markers.css"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/python-visualization/folium/folium/templates/leaflet.awesome.rotate.min.css"/>
+    
+            <meta name="viewport" content="width=device-width,
+                initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+            <style>
+                #map_dbc12bcc9008d2a959c3793447c41de0 {
+                    position: relative;
+                    width: 100.0%;
+                    height: 100.0%;
+                    left: 0.0%;
+                    top: 0.0%;
+                }
+                .leaflet-container { font-size: 1rem; }
+            </style>
+        
+</head>
+<body>
+    
+    
+            <div class="folium-map" id="map_dbc12bcc9008d2a959c3793447c41de0" ></div>
+        
+</body>
+<script>
+    
+    
+            var map_dbc12bcc9008d2a959c3793447c41de0 = L.map(
+                "map_dbc12bcc9008d2a959c3793447c41de0",
+                {
+                    center: [43.133331, 5.98333],
+                    crs: L.CRS.EPSG3857,
+                    ...{
+  "zoom": 12,
+  "zoomControl": true,
+  "preferCanvas": false,
+}
+
+                }
+            );
+
+            
+
+        
+    
+            var tile_layer_d8c3c050040d54522a584777e6f3ed18 = L.tileLayer(
+                "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                {
+  "minZoom": 0,
+  "maxZoom": 19,
+  "maxNativeZoom": 19,
+  "noWrap": false,
+  "attribution": "\u0026copy; \u003ca href=\"https://www.openstreetmap.org/copyright\"\u003eOpenStreetMap\u003c/a\u003e contributors",
+  "subdomains": "abc",
+  "detectRetina": false,
+  "tms": false,
+  "opacity": 1,
+}
+
+            );
+        
+    
+            tile_layer_d8c3c050040d54522a584777e6f3ed18.addTo(map_dbc12bcc9008d2a959c3793447c41de0);
+        
+</script>
+<style>
+    /* Style pour la liste des points */
+    #point-list {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: white;
+        padding: 10px;
+        border-radius: 5px;
+        box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.3);
+        max-height: 200px;
+        overflow-y: auto;
+        font-family: Arial, sans-serif;
+        font-size: 14px;
+        z-index: 1000; /* Assure que la liste reste au premier plan */
+    }
+</style>
+
+<button id="reset-button" class="btn btn-danger" style="position: absolute; top: 10px; left: 1400px; z-index: 1000;">Réinitialiser</button>
+
+
+<div id="point-list">
+    <strong>Points :</strong>
+    <ul id="points"></ul>
+</div>
+
+<script>
+var markers = [];  // ✅ Déclaration globale
+var lineLayer = null;
+var arrowLayer = null;
+var pointsList = document.getElementById("points");
+
+document.addEventListener("DOMContentLoaded", function () {
+
+    var map = map_dbc12bcc9008d2a959c3793447c41de0;
+
+    console.log("🚀 Réinitialisation des marqueurs au démarrage...");
+    
+    // Supprime les marqueurs existants
+    markers.forEach(marker => map_dbc12bcc9008d2a959c3793447c41de0.removeLayer(marker));
+    markers = [];
+
+    // Supprime aussi les lignes et flèches
+    if (lineLayer) { map_dbc12bcc9008d2a959c3793447c41de0.removeLayer(lineLayer); }
+    if (arrowLayer) { map_dbc12bcc9008d2a959c3793447c41de0.removeLayer(arrowLayer); }
+    lineLayer = null;
+    arrowLayer = null;
+    
+    // Vide la liste des points affichés
+    pointsList.innerHTML = "";
+
+
+    
+    // Définition des icônes
+    var redIcon = L.AwesomeMarkers.icon({ icon: 'map-marker', markerColor: 'red' });
+    var greenIcon = L.AwesomeMarkers.icon({ icon: 'map-marker', markerColor: 'green' });
+    var defaultIcon = L.AwesomeMarkers.icon({ icon: 'map-marker', markerColor: 'blue' });
+
+    function refreshUI() {
+        console.log("🔄 Rafraîchissement UI - Nombre de marqueurs :", markers.length);
+        pointsList.innerHTML = "";
+
+        markers.forEach((marker, index) => {
+            marker.unbindTooltip().bindTooltip(`#${index + 1}`, { permanent: true, direction: "top", offset: [0, -10] });
+
+            var listItem = document.createElement("li");
+            listItem.textContent = `Point #${index + 1} - (${marker.getLatLng().lat.toFixed(5)}, ${marker.getLatLng().lng.toFixed(5)})`;
+
+            // Ajout de la distance par rapport au précédent
+            if (index > 0) {
+                let prevLatLng = markers[index - 1].getLatLng();
+                let currentLatLng = marker.getLatLng();
+                let distance = prevLatLng.distanceTo(currentLatLng).toFixed(2); // Distance en mètres
+                listItem.textContent += ` | Distance: ${distance} m`;
+            }
+
+            pointsList.appendChild(listItem);
+
+            // Mise à jour des icônes
+            if (index === 0) {
+                marker.setIcon(redIcon); // Premier point en rouge
+            } else if (index === markers.length - 1) {
+                marker.setIcon(greenIcon); // Dernier point en vert
+            } else {
+                marker.setIcon(defaultIcon); // Points intermédiaires en bleu
+            }
+        });
+
+        updateArrows(); // Mise à jour des flèches
+    }
+
+    function updateArrows() {
+        // Suppression des anciennes flèches et lignes
+        if (arrowLayer) { map.removeLayer(arrowLayer); }
+        if (lineLayer) { map.removeLayer(lineLayer); }
+
+        if (markers.length > 1) {
+            let polyline = L.polyline(markers.map(m => m.getLatLng()), { color: "rgba(0, 0, 255, 0.3)", weight: 3 }).addTo(map);
+            lineLayer = polyline;
+
+            arrowLayer = L.polylineDecorator(polyline, {
+                patterns: [
+                    { offset: '50%', repeat: 0, symbol: L.Symbol.arrowHead({ pixelSize: 10, polygon: false, pathOptions: { stroke: true, color: 'blue' } }) }
+                ]
+            }).addTo(map);
+        }
+    }
+
+    function removeMarker(marker) {
+    var index = markers.indexOf(marker);
+    if (index !== -1) {
+        console.log(`🗑️ Suppression du marqueur #${index + 1}`);
+        map.removeLayer(marker);
+        markers.splice(index, 1);
+        refreshUI();
+    }
+}
+
+
+function onMapClick(e) {
+    console.log("🖱️ Clic détecté :", e.latlng);
+
+    var lat = e.latlng.lat;
+    var lng = e.latlng.lng;
+
+    // Vérifier si un marqueur est proche du clic
+    var clickedMarker = markers.find(m => {
+        let pos = m.getLatLng();
+        return Math.abs(pos.lat - lat) < 0.0001 && Math.abs(pos.lng - lng) < 0.0001;
+    });
+
+    if (clickedMarker) {
+        removeMarker(clickedMarker);
+        return;
+    }
+
+    // Ajouter un marqueur si aucun existant à cette position
+    var marker = L.marker([lat, lng], { icon: defaultIcon }).addTo(map);
+    marker.on('click', function () { removeMarker(marker); });
+    markers.push(marker);
+    refreshUI();
+}
+
+    map.on('click', onMapClick);
+});
+
+function sendPointToServer(point) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        let message = JSON.stringify({ type: "add_point", point: point });
+        console.log("📤 Envoi du message au serveur:", message); // 🔍 Vérifier l'envoi
+        ws.send(message);
+    } else {
+        console.error("🚨 WebSocket non connectée !");
+    }
+}
+
+function sendPoint(lat, lon) {
+            console.log("🟡 Tentative d'envoi d'un point...");
+            console.log("🔍 État de WebSocket:", ws.readyState);
+
+            if (ws.readyState === WebSocket.OPEN) {
+                let pointData = {
+                    type: "add_point",
+                    point: { lat: lat, lng: lng }
+                };
+                console.log("📤 Envoi du point au serveur:", pointData);
+                ws.send(JSON.stringify(pointData));
+            } else {
+                console.warn("⚠️ WebSocket non connecté !");
+            }
+//            let message = { type: "add_point", point: [lat, lon] };
+//            console.log("📤 Envoi du point :", message);  // Vérifier que le message est correct
+//            ws.send(JSON.stringify(message));
+        }
+
+// 1️⃣ Connexion au WebSocket
+var ws = new WebSocket("ws://localhost:8765");
+
+ws.onopen = function () {
+    console.log("✅ Connexion WebSocket établie avec le serveur !");
+};
+
+ws.onmessage = function (event) {
+    console.log("📩 Message reçu du serveur:", event.data);
+    try {
+        let data = JSON.parse(event.data);
+        // Ici, tu peux mettre à jour la carte si besoin
+        console.log("📍 Position reçue:", data);
+    } catch (e) {
+        console.error("Erreur de parsing JSON:", e);
+    }
+};
+
+ws.onclose = function () {
+    console.log("❌ Connexion WebSocket fermée.");
+};
+
+// 2️⃣ Fonction pour envoyer la liste des points au serveur Python
+function sendPoint(lat, lon) {
+    console.log("🟡 Tentative d'envoi d'un point...");
+    console.log("🔍 État actuel de WebSocket:", ws.readyState, "(1 = OPEN)");
+
+    let pointData = {
+        type: "add_point",
+        point: { lat: lat, lon: lon }
+    };
+
+    try {
+        if (ws.readyState === WebSocket.OPEN) {
+            console.log("📤 Envoi du point au serveur:", pointData);
+            ws.send(JSON.stringify(pointData));
+            console.log("✅ Message envoyé !");
+        } else {
+            console.warn("⚠️ WebSocket non connecté ou pas encore prêt !");
+        }
+    } catch (error) {
+        console.error("❌ Erreur lors de l'envoi du message WebSocket:", error);
+    }
+}
+
+
+// 3️⃣ Mise à jour pour envoyer les points dès qu'ils changent
+function refreshUI() {
+    pointsList.innerHTML = "";
+
+    markers.forEach((marker, index) => {
+        marker.unbindTooltip().bindTooltip(`#${index + 1}`, { permanent: true, direction: "top", offset: [0, -10] });
+
+        var listItem = document.createElement("li");
+        listItem.textContent = `Point #${index + 1} - (${marker.getLatLng().lat.toFixed(5)}, ${marker.getLatLng().lng.toFixed(5)})`;
+
+        if (index > 0) {
+            let prevLatLng = markers[index - 1].getLatLng();
+            let currentLatLng = marker.getLatLng();
+            let distance = prevLatLng.distanceTo(currentLatLng).toFixed(2);
+            listItem.textContent += ` | Distance: ${distance} m`;
+        }
+
+        pointsList.appendChild(listItem);
+
+        if (index === 0) {
+            marker.setIcon(redIcon);
+        } else if (index === markers.length - 1) {
+            marker.setIcon(greenIcon);
+        } else {
+            marker.setIcon(defaultIcon);
+        }
+    });
+
+    updateArrows();
+    sendPoints(); // 📤 Envoi des points à chaque mise à jour
+}
+
+    // Récupérer la bonne référence de la carte
+    var map = map_dbc12bcc9008d2a959c3793447c41de0;
+
+
+    document.getElementById("reset-button").addEventListener("click", function () {
+    console.log("🔄 Réinitialisation de la carte...");
+
+    markers.forEach(marker => map.removeLayer(marker));
+    markers = [];
+
+    if (lineLayer) { map.removeLayer(lineLayer); }
+    if (arrowLayer) { map.removeLayer(arrowLayer); }
+    lineLayer = null;
+    arrowLayer = null;
+
+    pointsList.innerHTML = "";
+
+    fetch("/reset", { method: "POST" })  // Envoie une requête au serveur
+    .then(response => response.text())
+    .then(data => alert(data))
+    .catch(error => console.error("Erreur:", error));
+
+
+    // Envoyer la commande de réinitialisation au serveur
+    if (ws.readyState === WebSocket.OPEN) {
+        let resetMessage = { type: "reset" };
+        console.log("📤 Envoi de la commande de réinitialisation au serveur:", resetMessage);
+        ws.send(JSON.stringify(resetMessage));
+    } else {
+        console.warn("⚠️ WebSocket non connecté !");
+    }
+    document.getElementById("reset-button").addEventListener("click", function () {
+    console.log("🔄 Réinitialisation de la carte...");
+
+    // Supprime les marqueurs
+    markers.forEach(marker => map_dbc12bcc9008d2a959c3793447c41de0.removeLayer(marker));
+    markers = [];
+
+    // Supprime les tracés et flèches
+    if (lineLayer) { map_dbc12bcc9008d2a959c3793447c41de0.removeLayer(lineLayer); }
+    if (arrowLayer) { map_dbc12bcc9008d2a959c3793447c41de0.removeLayer(arrowLayer); }
+    lineLayer = null;
+    arrowLayer = null;
+
+    // Vider la liste des points
+    pointsList.innerHTML = "";
+
+    // Envoyer la commande de réinitialisation au serveur WebSocket
+    if (ws.readyState === WebSocket.OPEN) {
+        let resetMessage = JSON.stringify({ type: "reset" });
+        ws.send(resetMessage);
+        console.log("📤 Message de réinitialisation envoyé au serveur");
+    } else {
+        console.warn("⚠️ WebSocket non connectée, impossible d'envoyer le message !");
+    }
+
+    // Envoyer une requête au serveur HTTP si besoin
+    fetch("/reset", { method: "POST" })
+        .then(response => response.text())
+        .then(data => console.log("✅ Réinitialisation serveur :", data))
+        .catch(error => console.error("❌ Erreur de réinitialisation :", error));
+});
+
+
+});
+
+
+</script>
+</body>
+</html> 
