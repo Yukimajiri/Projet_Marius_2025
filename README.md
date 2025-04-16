@@ -5,7 +5,7 @@ Marius/nav :
           /fonctionnels : algorithmes fonctionnels séparement, utilisés pour le rapport 2025. Les fichiers mains doivent être impérativement dans le même dossier que
                           que les différents fichiers fonctionnels pour fonctionner
                           
-          les fichiers "main" et "main_expliqué" sont des tentatives de fusions de codes non corrigées pour l instant
+les fichiers "main" et "main_expliqué" sont des tentatives de fusions de codes non corrigées pour l instant
                           
           /old versions : anciennes versions des codes avec des tests de différents procédés non concluant pour la plupart
           
