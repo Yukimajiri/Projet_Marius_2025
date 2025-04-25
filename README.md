@@ -14,3 +14,5 @@ les fichiers "main" et "main_expliqué" sont des tentatives de fusions de codes 
 Dernières étapes du projet : tout les algorithmes fonctionnait indépendament les uns des autres et chacuns renvoient les résultats attendus.
 La prochaine étape était de tout fusionner dans un seul fichier main.py, de sorte à l éxécuter en ssh sur la rasberryPi, et d avoir uniquement l IHM à ouvrir
 sur le pc hôte.
+
+petit eratum : le code de la navigation fonctionnel et expliqué sans la simulation se situe dans /nav/old versions/navV2_F.py
